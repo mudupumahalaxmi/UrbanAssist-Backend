@@ -1,44 +1,58 @@
 package com.urbanassist.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * CorsConfig — Configures Cross-Origin Resource Sharing (CORS).
- *
- * WHY THIS IS NEEDED:
- *   Browsers block JavaScript requests from one origin (e.g., http://localhost:5173
- *   where React runs) to a different origin (e.g., http://localhost:8080 where
- *   Spring Boot runs). This is a browser security feature called the
- *   "Same-Origin Policy".
- *
- *   CORS headers tell the browser: "It's OK, this backend trusts requests
- *   from the React frontend."
- *
- * WHAT EACH SETTING DOES:
- *   - allowedOrigins:  Which frontend URLs can call this API.
- *   - allowedMethods:  Which HTTP methods are permitted (GET, POST, PUT, DELETE).
- *   - allowedHeaders:  Which request headers the frontend can send (Authorization
- *                      for JWT, Content-Type for JSON).
- *   - allowCredentials: Whether cookies/auth headers are allowed.
  */
 @Configuration
 public class CorsConfig {
+
+    @Value("${cors.allowed-origins:}")
+    private String corsAllowedOrigins;
+
+    public CorsConfig() {
+    }
+
+    public CorsConfig(String corsAllowedOrigins) {
+        this.corsAllowedOrigins = corsAllowedOrigins;
+    }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Allow the Vite React dev server on all local ports (5173, 5174, etc.)
-        configuration.setAllowedOriginPatterns(List.of(
+        // Base development origins
+        List<String> allowedOrigins = new ArrayList<>(List.of(
             "http://localhost:*",
             "http://127.0.0.1:*"
         ));
+
+        // Add explicitly configured production origins from CORS_ALLOWED_ORIGINS
+        if (StringUtils.hasText(corsAllowedOrigins)) {
+            Arrays.stream(corsAllowedOrigins.split(","))
+                .map(String::trim)
+                .map(origin -> origin.replaceAll("/+$", ""))
+                .filter(StringUtils::hasText)
+                .forEach(allowedOrigins::add);
+        }
+
+        // Ensure Vercel domain pattern is always permitted for production and preview builds
+        if (!allowedOrigins.contains("https://*.vercel.app")) {
+            allowedOrigins.add("https://*.vercel.app");
+        }
+
+        configuration.setAllowedOriginPatterns(allowedOrigins);
 
         // Allow standard REST methods
         configuration.setAllowedMethods(List.of(
